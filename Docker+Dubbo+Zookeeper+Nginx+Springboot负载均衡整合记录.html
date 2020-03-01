@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<div class="htmledit_views" id="content_views">
+    <p> </p>
+
+    <p>在整合之前首先还是要搞清楚他们之间的作用和整合的顺序</p>
+
+    <p>首先项目是用Springboot编写的 缓存使用Redis 数据库MySQL 用了一个消息队列 不过这个不关键</p>
+
+    <p>接下来是dubbo和zk这两个的整合</p>
+
+    <p>具体的步骤是：</p>
+
+    <p>1.编写公共的接口项目 其中实体类记得要继承序列化接口</p>
+
+    <p>2.将这个项目 先用maven install打成jar包 之后用maven把这个jar包注册到本地仓库（关键） 指令是</p>
+
+    <p>mvn install:install-file -Dfile=XXXX.jar -DgroupId=XXXX -DartifactId=XXXXX -Dversion=XXXX -Dpackaging=jar</p>
+
+    <p>其中Dfile 如果你在这个jar的目录下使用mvn指令 那就只用输入jar包的名字交了 剩下的groupid artifactid 版本 都是后续你引入这个jar包时的标志</p>
+
+    <p>这一部分具体可以参考：</p>
+
+    <p><a href="https://www.cnblogs.com/darling2047/p/9681181.html" rel="nofollow">https://www.cnblogs.com/darling2047/p/9681181.html</a></p>
+
+    <p><a href="https://blog.csdn.net/lixiaoxiong55/article/details/85936260">https://blog.csdn.net/lixiaoxiong55/article/details/85936260</a></p>
+
+    <p>注意点是 引入了公共接口的实体类和服务后 记得把原来项目中import自身的依赖全部改成公共接口项目的依赖</p>
+
+    <p>因为很多人都是先写好一个项目之后再改造成服务提供者 还有就是 暴露服务的Service注解 引入的是dubbo里的依赖 不要引入成spring里面的注解 将这个接口用dubbo的service注解暴露后 就不能再直接访问这个服务了 </p>
+
+    <p>3.编写好项目后 把项目放到docker上 这一步我的操作是需要先将写好的这个项目（包括提供者也包括消费者）打成jar包 所以最好一次到位 不然改一下又要重新打- -</p>
+
+    <p>这里要注意的点是：假如单独把一个springboot项目放到docker上 而不把使用到的redis mysql 消息队列中心 等等需要写ip和端口的组件放到docker上 即：试图让docker中运行的项目去访问宿主机上的信息 那么ip肯定不能写localhost 也不能写127.0.0.1 因为这会让项目去访问容器自身 解决办法可以百度“docker访问宿主机” </p>
+
+    <p>不过由于公司滴电脑我是不关的 所以可以有一个最简单的解决办法 就是直接ipconfig获取本机ip 然后在所有填写ip的地方填写该ip 这一做法是亲测有效的</p>
+
+    <p>接下来要注意的就是mysql需要开启远程连接 百度一下两步就行</p>
+
+    <p>4.放到docker上的项目注册到zookeeper  记得把springboot对dubbo配置中的zk地址改好 再跑到docker上</p>
+
+    <p>这里我使用的是idea自带的docker来操作的 因为更方便看到控制台 </p>
+
+    <p>按照这篇博客即可：<a href="https://www.cnblogs.com/hsz-csy/p/9183946.html" rel="nofollow">https://www.cnblogs.com/hsz-csy/p/9183946.html</a></p>
+
+    <p>最后可以先不用把idea里的镜像停掉 继续下一步</p>
+
+    <p>5.接下来是负载均衡 dubbo已经在服务层面上做了负载均衡 可以跑2个同样的provider 稍微做一点标记 比如provider1被调用 就在控制台输出1 或者打到日志里 然后用1个消费者去调用 会发现dubbo自己会选择一个provider来服务</p>
+
+    <p>而nginx是在http web层就进行了负载均衡</p>
+
+    <p>关于nginx的入门可以参考<a href="https://www.cnblogs.com/memoryXudy/p/7778101.html" rel="nofollow">https://www.cnblogs.com/memoryXudy/p/7778101.html</a></p>
+
+    <p>这篇博客里面的配置文件除了第一行的<img alt="" class="has" height="62" src="https://img-blog.csdnimg.cn/20190719165101459.png" width="240" /></p>
+
+    <p>是显示错误 其他的可以完全拷贝过去 覆盖原config文件</p>
+
+    <p>另外建议每次更改config之后 直接任务管理器关掉nginx的进程再重启 因为我用reload指令总是没用 我也不知道为什么</p>
+
+    <p>6.最后的构成是：</p>
+
+    <p>2个provider 运行在docker中 并在dubbo中注册 这两个provider 除了名字和一点标志性的输出不一样外都是一样的</p>
+
+    <p><img alt="" class="has" height="353" src="https://img-blog.csdnimg.cn/20190719165409469.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2VscHN5Y29uZ3IwMA==,size_16,color_FFFFFF,t_70" width="1200" /></p>
+
+    <p>这个consumer1 其实是两个同名的消费者 </p>
+
+    <p><img alt="" class="has" height="202" src="https://img-blog.csdnimg.cn/20190719165500858.png" width="251" /></p>
+
+    <p>然后用nginx来分配他们两个端口</p>
+
+    <p>我使用的是：<img alt="" class="has" height="105" src="https://img-blog.csdnimg.cn/20190719165618472.png" width="252" /></p>
+
+    <p>前者是docker映射端口 后者是本机端口</p>
+
+    <p>nginx配置的是前者 <img alt="" class="has" height="72" src="https://img-blog.csdnimg.cn/20190719165724359.png" width="309" /></p>
+
+    <p>之后测试：<img alt="" class="has" height="315" src="https://img-blog.csdnimg.cn/20190719165806675.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2VscHN5Y29uZ3IwMA==,size_16,color_FFFFFF,t_70" width="932" /><img alt="" class="has" height="309" src="https://img-blog.csdnimg.cn/20190719165756873.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2VscHN5Y29uZ3IwMA==,size_16,color_FFFFFF,t_70" width="908" /><img alt="" class="has" height="177" src="https://img-blog.csdnimg.cn/20190719165825969.png" width="1200" /></p>
+
+    <p>我在dubboadmin中配置了我这个服务的负载策略是轮询 所以每4次调用的顺序是 con1pro1 con2pro1 con1pro2 con2pro2这样</p>
+
+    <p>最后是这么多东西的打开顺序</p>
+
+    <p>1.先开zk 我用的是3.5.5版本的 管理员cmd下进入bin 然后zkServer</p>
+
+    <p>2.再开dubboadmin 我直接是java -jar来开那个jar包的 </p>
+
+    <p>3.开两个provider 之后看一下dubboadmin中提供者数量是否正确</p>
+
+    <p>4.开两个consumer consumer要在provider之后开启 不然会找不到服务提供者 在之前用maven打包的时候</p>
+
+    <p> 也可以用mvn package -DskipTests来打包 我在直接打包的时候Test是无法通过的 因为此时provider在容器内 而consumer没有进入docker 所以提示找不到服务 这里直接跳过test就好了 跑到docker上之后是没问题的</p>
+
+    <p>5.开nginx 最后测试即可</p>
+
+    <p>高强度四处抄作业 真滴累</p>
+
+    <p>代码实在有点乱 稍微整理一下再放到github上</p>
+</div>
+</body>
+</html>
